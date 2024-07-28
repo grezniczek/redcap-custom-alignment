@@ -19,8 +19,8 @@ class CustomAlignmentExternalModule extends \ExternalModules\AbstractExternalMod
         $page = defined("PAGE") ? PAGE : "";
         if ($page == "DataEntry/index.php") {
             global $Proj;
-            $form = isset($Proj->forms[$_GET["page"]]) ? $_GET["page"] : "";
-            if ($form != "") {
+            $form = isset($Proj->forms[$_GET["page"]]) ? $_GET["page"] : null;
+            if ($form) {
                 $this->set_custom_alignment($Proj, $form, self::AT_CAF);
             }
         }
@@ -33,12 +33,25 @@ class CustomAlignmentExternalModule extends \ExternalModules\AbstractExternalMod
         }
     }
 
+    function redcap_pdf($project_id, $metadata, $data, $instrument, $record, $event_id, $instance) {
+        if (!isset($GLOBALS["Proj"])) return;
+        global $Proj;
+        $this->set_custom_alignment($Proj, $instrument, self::AT_CAP);
+        // Transfer to $metadata
+        foreach ($metadata as &$m) {
+            $m["custom_alignment"] = $Proj->metadata[$m["field_name"]]["custom_alignment"] ?? null;
+        }
+        return [ "metadata" => $metadata, "data" => $data ];
+    }
+
     #endregion
 
+    #region Implementation
 
     private function set_custom_alignment($Proj, $form, $at_name) {
-        foreach ($Proj->forms[$form]["fields"] as $target => $_) {
-            $meta = $Proj->metadata[$target] ?? [];
+        $fields = array_keys(array_key_exists($form, $Proj->forms) ? $Proj->forms[$form]["fields"] : $Proj->metadata);
+        foreach ($fields as $field) {
+            $meta = $Proj->metadata[$field] ?? [];
             $misc = $meta["misc"] ?? "";
             if (strpos($misc, $at_name) !== false) {
                 $result = ActionTagParser::parse($misc);
@@ -46,7 +59,7 @@ class CustomAlignmentExternalModule extends \ExternalModules\AbstractExternalMod
                     if ($at["text"] == $at_name && $at["param"]["type"] == "quoted-string") {
                         $aligment = $this->parse_aligment($at["param"]["text"]);
                         if ($aligment) {
-                            $Proj->metadata[$target]["custom_alignment"] = $aligment;
+                            $Proj->metadata[$field]["custom_alignment"] = $aligment;
                         }
                     }
                 }
@@ -62,4 +75,6 @@ class CustomAlignmentExternalModule extends \ExternalModules\AbstractExternalMod
         }
         return null;
     }
+
+    #endregion
 }
